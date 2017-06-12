@@ -1,0 +1,221 @@
+#include <LiquidCrystal.h>
+#include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
+
+/*****************************************************************************
+ * Sketch:  LCD_CharSet.pde
+ * Author:  Andreas Kriwanek
+ * Version: 1.00 05.04.2011/09:35
+ *
+ * Hardware:
+ * Arduino UNO
+ * DFRobot LCD Keypad Shield
+ *
+ * This sketch generates a character map of th LCD shield. Every value from
+ * 0x00 - 0xFF will be sent to the display. The correspomding character is
+ * shown in line 2 of the display.
+ *
+ *****************************************************************************/
+
+// select the pins used on the LCD panel:
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(16, 3, NEO_GRB + NEO_KHZ800);
+
+char LCDChar[2]="";
+// define some values used by the panel and buttons
+int lcd_key     = 0;  //will contain voltage depending on pressed button
+int adc_key_in  = 0;
+int pgm         = 0;  //will hold the currently selected program
+int pgm_of_the_past = 0;  //will hold the last pushed program
+
+#define btnRIGHT  0
+#define btnUP     1
+#define btnDOWN   2
+#define btnLEFT   3
+#define btnSELECT 4
+#define btnNONE   5
+
+
+void setup()
+{
+  lcd.begin(16, 2);              // 16x2 LCD panel
+  lcd.setCursor(0,0);
+  lcd.print("Stehlampe");
+  lcd.setCursor(0,1);
+  lcd.print("0.1 maybe");
+  strip.setBrightness(255);
+  strip.begin();
+  strip.show(); // Initialize all pixels to 'off'
+  delay(2000);
+  lcd.clear();
+}
+
+int read_LCD_buttons(){               // read the buttons
+    adc_key_in = analogRead(0);       // read the value from the sensor
+
+    // my buttons when read are centered at these valies: 0, 144, 329, 504, 741
+    // we add approx 50 to those values and check to see if we are close
+    // We make this the 1st option for speed reasons since it will be the most likely result
+
+    if (adc_key_in > 1000) return btnNONE;
+
+    // For V1.1 us this threshold
+    if (adc_key_in < 50)   return btnRIGHT;
+    if (adc_key_in < 250)  return btnUP;
+    if (adc_key_in < 450)  return btnDOWN;
+    if (adc_key_in < 650)  return btnLEFT;
+    if (adc_key_in < 850)  return btnSELECT;
+
+   // For V1.0 comment the other threshold and use the one below:
+   /*
+     if (adc_key_in < 50)   return btnRIGHT;
+     if (adc_key_in < 195)  return btnUP;
+     if (adc_key_in < 380)  return btnDOWN;
+     if (adc_key_in < 555)  return btnLEFT;
+     if (adc_key_in < 790)  return btnSELECT;
+   */
+
+    return btnNONE;                // when all others fail, return this.
+}
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+}
+
+// Fill the dots one after the other with a color
+void colorWipe(uint32_t c, uint8_t wait) {
+  for(uint16_t i=0; i<strip.numPixels(); i++) {
+    strip.setPixelColor(i, c);
+    strip.show();
+    delay(wait);
+  }
+}
+
+void rainbow(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256; j++) {
+    for(i=0; i<strip.numPixels(); i++) {
+      strip.setPixelColor(i, Wheel((i+j) & 255));
+    }
+    strip.show();
+    delay(wait);
+  }
+}
+
+// Slightly different, this makes the rainbow equally distributed throughout
+void rainbowCycle(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
+    for(i=0; i< strip.numPixels(); i++) {
+      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+    }
+    strip.show();
+    delay(wait);
+  }
+}
+
+//Theatre-style crawling lights.
+void theaterChase(uint32_t c, uint8_t wait) {
+  for (int j=0; j<10; j++) {  //do 10 cycles of chasing
+    for (int q=0; q < 3; q++) {
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, c);    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+//Theatre-style crawling lights with rainbow effect
+void theaterChaseRainbow(uint8_t wait) {
+  for (int j=0; j < 256; j++) {     // cycle all 256 colors in the wheel
+    for (int q=0; q < 3; q++) {
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, Wheel( (i+j) % 255));    //turn every third pixel on
+      }
+      strip.show();
+
+      delay(wait);
+
+      for (int i=0; i < strip.numPixels(); i=i+3) {
+        strip.setPixelColor(i+q, 0);        //turn every third pixel off
+      }
+    }
+  }
+}
+
+void loop()
+{
+  lcd_key = read_LCD_buttons();   // read the buttons
+  switch (lcd_key) {
+    case btnUP:{
+      if (pgm >= 7) {
+        break;
+      }
+      pgm=pgm+1;
+      delay(500);
+      break;
+    }
+    case btnDOWN:{
+      if (pgm <= 0 ) {
+        break;
+      }
+      pgm=pgm-1;
+      delay(500);
+      break;
+    }
+    case btnRIGHT:{
+      if (pgm == pgm_of_the_past) {
+        break;
+      }
+      //Do something;
+      pgm_of_the_past = pgm;
+      delay(500);
+      break;
+    }
+  }
+  lcd.setCursor(0,0);
+  lcd.print(pgm);
+  lcd.setCursor(0,1);
+  lcd.print(pgm_of_the_past);
+
+  switch (pgm_of_the_past) {
+    case 0:{
+      strip.show();
+      break;
+    }
+    case 1:{
+      rainbowCycle(20);
+      break;
+    }
+    case 2:{
+      rainbow(100);
+      break;
+    }
+    case 3:{
+      theaterChaseRainbow(10);
+      break;
+    }
+  }
+
+
+}
